@@ -27,7 +27,7 @@ In the context of formal verification, a mathematical model is an abstract repre
 
 For instance, sequential logic (such as a digital counter) is modeled as a **State Transition System**. It is defined mathematically using a set of all possible states ($S$), the initial starting state ($S_0$), and the transition relation, or next-state logic ($R$). When performing Bounded Model Checking (BMC), the solver takes this transition relation and unrolls it across time. It constructs a comprehensive formula representing step 1, AND step 2, AND step 3, up to a defined bound of $k$ steps.
 
-Another prominent example is the **Miter Circuit** used in Equivalence Checking. When assessing whether two distinct logic circuits behave identically, a miter circuit connects the inputs of both circuits together and feeds their respective outputs into an XOR gate. The mathematical model then poses a single  to the SAT solver: *Is there any possible input combination that causes this XOR gate to output a 1?*
+Another prominent example is the **Miter Circuit** used in Equivalence Checking. When assessing whether two distinct logic circuits behave identically, a miter circuit connects the inputs of both circuits together and feeds their respective outputs into an XOR gate. The mathematical model then poses a single question to the SAT solver: *Is there any possible input combination that causes this XOR gate to output a 1?*
 
 ### Interpreting the Solver's Output
 
@@ -46,10 +46,21 @@ Depending on the verification objective, the solver's output carries distinct im
 
 Having established the theoretical framework, we can now examine how these principles apply to the four primary tasks of the assignment.
 
-###  1: Equivalence Checking
+### 1: Equivalence Checking
 
 **The Objective:** Given a reference circuit (`y <= a & b;`) and a modified implementation circuit (`y <= ~(~a | ~b);`), the goal is to prove that they are functionally identical using a miter circuit and SAT-based checking.
 
+**Theoretical Work: Modeling and Miter Construction**
+To formally check sequential equivalence, we mathematically model both circuits as state transition systems:
+* **Circuit A (Ref) Transition System ($T_A$):** $y_{A_{k+1}} = (a_k \land b_k)$
+* **Circuit B (Impl) Transition System ($T_B$):** $y_{B_{k+1}} = \neg(\neg a_k \lor \neg b_k)$
+
+*Constructing the Miter Circuit:*
+A miter circuit ties the inputs of both systems together ($a_A = a_B$, $b_A = b_B$) and feeds their outputs into an XOR gate to check for inequality. The SAT solver attempts to satisfy the equation: $Miter_{output} = (y_A \oplus y_B)$.
+
+By De Morgan's laws, $\neg(\neg a \lor \neg b)$ is mathematically identical to $(a \land b)$. Therefore, $(y_A \oplus y_B)$ will always evaluate to $0$. The SAT solver will return **UNSAT**, formally proving that no combination of inputs can cause the circuits to behave differently.
+
+**Simulation:**
 In the `Equivalence checking/` directory, three files were established: `ref.v` (the reference design), `impl.v` (the implementation), and `sateqvcheck.ys` (the execution script).
 
 The process was executed using the following Yosys commands:
@@ -67,11 +78,26 @@ The process was executed using the following Yosys commands:
 
 ---
 
-###  2: Bounded Model Checking (Safety Property)
+### 2: Bounded Model Checking (Safety Property)
 
 **The Objective:** To analyze a 2-bit counter and ensure it never reaches the state `11`. This represents a standard "Safety" property guaranteeing that an invalid condition never occurs.
 
-In the `BMC using SAT solver/` directory, the counter logic was written in `counter.v`, with SystemVerilog Assertions injected directly into the code (e.g., `assert(count != 2'b11);`). The verification was managed via the `verify.ys` script.
+**Theoretical Work: Applying BMC and Constructing the SAT Formula**
+Bounded Model Checking (BMC) unrolls the hardware design for $k$ clock cycles into a massive Boolean equation. The SAT solver asks: *"Is there any combination of inputs over $k$ cycles that makes the safety property FALSE?"*
+
+Let $S_k$ be the state of the counter `count` at clock cycle $k$. Let $r_k$ be the state of `rst`.
+1. **Initial State ($I$):** We assume the system starts in reset. $I(S_0, r_0) = (r_0 = 1) \land (S_0 = 0)$
+2. **Transition Relation ($T$):** The counter logic moving from cycle $k$ to $k+1$. $T(S_k, r_{k+1}, S_{k+1}) = (r_{k+1} = 1 \implies S_{k+1} = 0) \land (r_{k+1} = 0 \implies S_{k+1} = (S_k + 1) \bmod 4)$
+3. **Property Violation ($V$):** The safety property is that the counter should never reach state `2'b11` (decimal 3). The SAT solver looks for a violation: $V(S_k) = (S_k = 3)$
+
+*The Complete SAT Formula ($F_k$):*
+$$F_k = I(S_0, r_0) \land \left( \bigwedge_{i=0}^{k-1} T(S_i, r_{i+1}, S_{i+1}) \right) \land V(S_k)$$
+
+*Answer to "In Verilog code have you added anything for property check?":*
+Yes. To translate this mathematics into code, SystemVerilog Assertions (SVA) were added to the Verilog file inside an `` `ifdef FORMAL `` block. Specifically, an `assume(rst)` statement was added to satisfy the Initial State ($I$), and an `assert(count != 2'b11)` statement was added to define the safety property constraint.
+
+**Simulation:**
+In the `BMC using SAT solver/` directory, the counter logic was written in `counter.v`, with the aforementioned assertions injected directly into the code. The verification was managed via the `verify.ys` script.
 
 The command breakdown is as follows:
 
@@ -92,7 +118,7 @@ Viewing the resulting `trace.vcd` file in GTKWave visually demonstrates the exac
 
 ---
 
-###  3: Bounded Model Checking (Liveness Property)
+### 3: Bounded Model Checking (Liveness Property)
 
 **The Objective:** Using the same 2-bit counter, the next goal is to verify a "Liveness" property: proving that *eventually*, the counter returns to `00`. While safety properties ensure a negative outcome is avoided, liveness properties guarantee a positive outcome eventually occurs.
 
@@ -109,7 +135,7 @@ Because standard SAT solvers lack the capacity to efficiently prove infinite loo
 
 ---
 
-###  4: Optimization and Equivalence Checking
+### 4: Optimization and Equivalence Checking
 
 **The Objective:** The final task involves applying automatic logic optimization to a segment of unoptimized RTL logic specifically `F = (A & B) | (A & B & C)` and subsequently proving that the newly reduced circuit is functionally equivalent to the original design.
 
