@@ -1,0 +1,12 @@
+# 1. Read the RTL file
+read_verilog original.v
+
+# 2. Prepare the design
+prep -top top
+
+# 3. Perform logic optimization
+# This will mathematically reduce (A & B) | (A & B & C) down to just (A & B)
+opt
+
+# 4. Generate the optimized netlist
+write_verilog optimized.v

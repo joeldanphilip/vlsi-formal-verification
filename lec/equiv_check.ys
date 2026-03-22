@@ -1,0 +1,21 @@
+
+read_verilog original.v
+rename top org
+
+
+read_verilog optimized.v
+rename top optm
+
+# 3. Create a miter circuit
+
+equiv_make org optm miter
+
+
+hierarchy -top miter
+
+
+
+equiv_simple
+
+# Halt and report success or failure
+equiv_status -assert

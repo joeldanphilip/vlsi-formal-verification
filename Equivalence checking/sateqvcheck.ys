@@ -1,0 +1,38 @@
+# Read reference
+read_verilog ref.v
+prep -auto-top
+design -stash ref
+
+# Read implementation
+read_verilog impl.v
+prep -auto-top
+design -stash impl
+
+
+design -load ref
+design -push
+flatten
+techmap
+abc -fast
+design -pop
+design -stash ref_mapped
+
+
+design -load impl
+design -push
+flatten
+techmap
+abc -fast
+design -pop
+design -stash impl_mapped
+
+design -reset
+design -copy-from ref_mapped -as ref ref
+design -copy-from impl_mapped -as impl impl
+
+# Equivalence check
+equiv_make ref impl equiv
+prep -top equiv
+
+equiv_simple
+equiv_status

@@ -1,0 +1,10 @@
+# Read the Verilog code
+read_verilog -formal lively_counter.v
+
+# Prepare the design
+prep -top counter
+
+# This format natively understands liveness properties
+write_smt2 -wires counter.smt2
+#dont run in yosys run on linux terminal
+!yosys-smtbmc -s yices -t 10 counter.smt2

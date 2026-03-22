@@ -1,0 +1,11 @@
+# 1. Read the Verilog file
+read_verilog -formal counter.v
+
+# 2. Prepare the basic design
+prep -top counter
+
+async2sync
+chformal -assume -early
+clk2fflogic
+
+sat -seq 4 -prove-asserts -show-ports -dump_vcd trace.vcd counter
